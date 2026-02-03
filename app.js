@@ -2,54 +2,46 @@ const canvas = document.getElementById('gardenCanvas');
 const ctx = canvas.getContext('2d');
 const tooltip = document.getElementById('tooltip');
 const plantSelect = document.getElementById('plantSelect');
-const gridSize = 10; // default grid size, scalable later
-const cellSize = 50; // pixels
+const sidebar = document.getElementById('sidebar');
+const plantList = document.getElementById('plantList');
+const gardenSizeSelect = document.getElementById('gardenSize');
 
 let currentTool = null;
-let plantsData = []; // loaded from CSV
-let gardenGrid = []; // stores info for each cell
+let plantsData = [];
+let gardenGrid = [];
+let placedPlants = [];
 
-// category → emoji
-const emojiMap = {
-  herb: "🌿",
-  vegetable: "🥕",
-  fruit: "🍅",
-  flower: "🌸",
-  corn: "🌽",
-  bean: "🫘",
-  other: "🌱"
-};
+let gridSize = parseInt(gardenSizeSelect.value);
+let cellSize = 600 / gridSize;
 
-// Initialize grid
+const emojiMap = { herb:"🌿", vegetable:"🥕", fruit:"🍅", flower:"🌸", corn:"🌽", bean:"🫘", other:"🌱" };
+
 function initGrid() {
-  for (let y=0; y<gridSize; y++) {
-    gardenGrid[y] = [];
-    for (let x=0; x<gridSize; x++) {
-      gardenGrid[y][x] = { type: 'empty', plant: null };
+  gardenGrid = [];
+  for(let y=0;y<gridSize;y++){
+    gardenGrid[y]=[];
+    for(let x=0;x<gridSize;x++){
+      gardenGrid[y][x]={ type:'empty', plant:null };
     }
   }
 }
 
-// Draw grid
 function drawGrid() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
   for(let y=0;y<gridSize;y++){
     for(let x=0;x<gridSize;x++){
       const cell = gardenGrid[y][x];
-      ctx.fillStyle = cell.type === 'tilled' ? '#deb887' :
-                      cell.type === 'raised' ? '#a0522d' : '#7cfc00';
+      ctx.fillStyle = cell.type==='tilled' ? '#deb887' :
+                      cell.type==='raised' ? '#a0522d' : '#7cfc00';
       ctx.fillRect(x*cellSize, y*cellSize, cellSize-1, cellSize-1);
 
-      // Draw plant emoji
       if(cell.plant){
+        const emoji = emojiMap[cell.plant.category] || '🌱';
         ctx.font = `${cellSize*0.6}px Arial`;
-        ctx.fillText(emojiMap[cell.plant.category] || "🌱",
-                     x*cellSize + cellSize*0.2,
-                     y*cellSize + cellSize*0.7);
+        ctx.fillText(emoji, x*cellSize + cellSize*0.2, y*cellSize + cellSize*0.7);
       }
 
-      // Draw grid lines
-      ctx.strokeStyle = "#000";
+      ctx.strokeStyle = "#00000022";
       ctx.strokeRect(x*cellSize, y*cellSize, cellSize, cellSize);
     }
   }
@@ -69,24 +61,23 @@ async function loadSeeds() {
       start_method: cols[2],
       start_time: cols[3],
       outside_time: cols[4],
-      spacing: cols[5],
+      spacing: parseInt(cols[5]),
       notes: cols[6],
       category: categorize(cols[0])
     };
     plantsData.push(plant);
     const option = document.createElement('option');
-    option.value = plantsData.length-1; // index
+    option.value = plantsData.length-1;
     option.textContent = plant.variety;
     plantSelect.appendChild(option);
   });
 }
 
-// categorize crop
 function categorize(crop){
-  crop = crop.toLowerCase();
+  crop=crop.toLowerCase();
   if(crop.includes('herb')) return 'herb';
   if(crop.includes('flower')) return 'flower';
-  if(crop.includes('tomato') || crop.includes('pepper') || crop.includes('cucumber') || crop.includes('squash') || crop.includes('melon') || crop.includes('beet') || crop.includes('carrot') || crop.includes('corn')) return 'vegetable';
+  if(crop.includes('tomato')||crop.includes('pepper')||crop.includes('cucumber')||crop.includes('squash')||crop.includes('melon')||crop.includes('beet')||crop.includes('carrot')) return 'vegetable';
   if(crop.includes('corn')) return 'corn';
   if(crop.includes('bean')) return 'bean';
   return 'other';
@@ -96,36 +87,66 @@ function categorize(crop){
 document.getElementById('tiller').onclick = ()=>currentTool='tilled';
 document.getElementById('raisedBed').onclick = ()=>currentTool='raised';
 plantSelect.onchange = ()=>currentTool='plant';
+document.getElementById('toggleSidebar').onclick = ()=>sidebar.style.display=sidebar.style.display==='none'?'block':'none';
+gardenSizeSelect.onchange = ()=>{
+  gridSize=parseInt(gardenSizeSelect.value);
+  cellSize=600/gridSize;
+  initGrid();
+  drawGrid();
+  placedPlants=[];
+  updateSidebar();
+};
 
-// Handle clicks on canvas
+// Place plant respecting spacing grid
 canvas.addEventListener('click', e=>{
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left)/cellSize);
-  const y = Math.floor((e.clientY - rect.top)/cellSize);
-  const cell = gardenGrid[y][x];
+  const rect=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/cellSize);
+  const y=Math.floor((e.clientY-rect.top)/cellSize);
+  const cell=gardenGrid[y][x];
 
   if(currentTool==='tilled') cell.type='tilled';
   else if(currentTool==='raised') cell.type='raised';
   else if(currentTool==='plant' && plantSelect.value){
-    if(cell.type==='tilled' || plantsData[plantSelect.value].category==='herb'){
-      cell.plant = plantsData[plantSelect.value];
-    }
-  }
+    const plant = plantsData[plantSelect.value];
+    const spacingTiles = Math.ceil(plant.spacing/12);
+    const occupiedTiles = [];
+    let canPlace=true;
 
-  drawGrid();
+    for(let dy=0;dy<spacingTiles;dy++){
+      for(let dx=0;dx<spacingTiles;dx++){
+        const nx=x+dx, ny=y+dy;
+        if(ny>=gridSize || nx>=gridSize || (gardenGrid[ny][nx].type==='empty' && plant.category!=='herb') || gardenGrid[ny][nx].plant){
+          canPlace=false;
+          break;
+        }
+      }
+    }
+    if(canPlace){
+      for(let dy=0;dy<spacingTiles;dy++){
+        for(let dx=0;dx<spacingTiles;dx++){
+          const nx=x+dx, ny=y+dy;
+          gardenGrid[ny][nx].plant=plant;
+          occupiedTiles.push({x:nx,y:ny});
+        }
+      }
+      placedPlants.push({plant, occupiedTiles});
+      updateSidebar();
+      drawGrid();
+    } else alert("Cannot place here, check spacing or soil.");
+  }
 });
 
-// Tooltip on hover
+// Tooltip
 canvas.addEventListener('mousemove', e=>{
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left)/cellSize);
-  const y = Math.floor((e.clientY - rect.top)/cellSize);
-  const cell = gardenGrid[y]?.[x];
+  const rect=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/cellSize);
+  const y=Math.floor((e.clientY-rect.top)/cellSize);
+  const cell=gardenGrid[y]?.[x];
   if(cell && cell.plant){
     tooltip.style.display='block';
-    tooltip.style.left = (e.pageX + 10)+'px';
-    tooltip.style.top = (e.pageY + 10)+'px';
-    tooltip.innerHTML = `
+    tooltip.style.left=(e.pageX+10)+'px';
+    tooltip.style.top=(e.pageY+10)+'px';
+    tooltip.innerHTML=`
       <strong>${cell.plant.variety}</strong><br>
       Crop: ${cell.plant.crop}<br>
       Start: ${cell.plant.start_method}<br>
@@ -135,19 +156,17 @@ canvas.addEventListener('mousemove', e=>{
   } else tooltip.style.display='none';
 });
 
-// Save/load to localStorage
-function saveGarden(){ localStorage.setItem('gardenGrid', JSON.stringify(gardenGrid)); }
-function loadGarden(){
-  const saved = localStorage.getItem('gardenGrid');
-  if(saved){ gardenGrid = JSON.parse(saved); drawGrid(); }
+function updateSidebar(){
+  plantList.innerHTML='';
+  placedPlants.forEach(p=>{
+    const li=document.createElement('li');
+    li.textContent=`${p.plant.variety} - ${p.occupiedTiles.length} tiles`;
+    plantList.appendChild(li);
+  });
 }
 
 window.onload = async ()=>{
   initGrid();
   await loadSeeds();
-  loadGarden();
   drawGrid();
-}
-
-// Save automatically every 10 seconds
-setInterval(saveGarden, 10000);
+};
