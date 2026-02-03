@@ -2,86 +2,39 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Garden Planner - Zone 4a</title>
+<title>Family Garden Planner</title>
 <style>
   body { font-family: sans-serif; padding: 20px; }
-  table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; cursor: pointer; }
-  th { background: #f0f0f0; }
-  th.sorted-asc::after { content: " ▲"; }
-  th.sorted-desc::after { content: " ▼"; }
+  #tools { margin-bottom: 10px; }
+  button { margin-right: 5px; }
+  #plantSelect { margin-right: 10px; }
+  #tooltip {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #333;
+    padding: 5px;
+    font-size: 12px;
+    pointer-events: none;
+    display: none;
+    z-index: 100;
+  }
 </style>
 </head>
 <body>
-<h1>Garden Planner - Zone 4a</h1>
-<table id="gardenTable">
-  <thead>
-    <tr>
-      <th data-col="0">Crop</th>
-      <th data-col="1">Variety</th>
-      <th data-col="2">Start Method</th>
-      <th data-col="3">Start Time</th>
-      <th data-col="4">Outside Time</th>
-      <th data-col="5">Spacing (inches)</th>
-      <th data-col="6">Notes</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+<h1>Family Garden Planner - Zone 4a</h1>
 
-<script>
-async function loadCSV() {
-  const response = await fetch('seeds.csv');
-  const text = await response.text();
-  const rows = text.split('\n');
-  const headers = rows.shift(); // remove header
-  const tableBody = document.querySelector('#gardenTable tbody');
+<div id="tools">
+  <button id="tiller">Tiller</button>
+  <button id="raisedBed">Raised Bed</button>
+  <select id="plantSelect">
+    <option value="">--Select Plant--</option>
+  </select>
+  <button id="combo3sisters">3 Sisters Combo</button>
+</div>
 
-  rows.forEach(row => {
-    if(!row.trim()) return; // skip empty lines
-    const cols = row.split(',');
-    const tr = document.createElement('tr');
-    cols.forEach(col => {
-      const td = document.createElement('td');
-      td.textContent = col;
-      tr.appendChild(td);
-    });
-    tableBody.appendChild(tr);
-  });
-}
+<canvas id="gardenCanvas" width="600" height="600" style="border:1px solid #000;"></canvas>
+<div id="tooltip"></div>
 
-function sortTable(table, colIndex) {
-  const tbody = table.tBodies[0];
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  const ths = table.querySelectorAll('th');
-
-  let asc = !ths[colIndex].classList.contains('sorted-asc');
-  ths.forEach(th => th.classList.remove('sorted-asc', 'sorted-desc'));
-  ths[colIndex].classList.add(asc ? 'sorted-asc' : 'sorted-desc');
-
-  rows.sort((a, b) => {
-    const aText = a.children[colIndex].textContent.trim().toLowerCase();
-    const bText = b.children[colIndex].textContent.trim().toLowerCase();
-
-    if(!isNaN(parseFloat(aText)) && !isNaN(parseFloat(bText))) {
-      return asc ? aText - bText : bText - aText;
-    } else {
-      return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
-    }
-  });
-
-  rows.forEach(row => tbody.appendChild(row));
-}
-
-// Add click-to-sort functionality
-document.querySelectorAll('th').forEach(th => {
-  th.addEventListener('click', () => {
-    const table = th.closest('table');
-    sortTable(table, parseInt(th.dataset.col));
-  });
-});
-
-loadCSV();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
