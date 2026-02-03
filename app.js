@@ -18,7 +18,7 @@ let cellSizePx = canvasSize / gridSizeInches; // size of 1 inch in pixels
 
 const emojiMap = { herb:"🌿", vegetable:"🥕", fruit:"🍅", flower:"🌸", corn:"🌽", bean:"🫘", other:"🌱" };
 
-// Initialize garden grid
+// ------------------- INITIALIZE GRID -------------------
 function initGrid() {
   gardenGrid = [];
   for(let y=0;y<gridSizeInches;y++){
@@ -29,11 +29,11 @@ function initGrid() {
   }
 }
 
-// Draw grid and plants
+// ------------------- DRAW GRID -------------------
 function drawGrid() {
   ctx.clearRect(0,0,canvasSize,canvasSize);
 
-  // Draw tiles
+  // Draw internal cells
   for(let y=0;y<gridSizeInches;y++){
     for(let x=0;x<gridSizeInches;x++){
       const cell = gardenGrid[y][x];
@@ -47,29 +47,33 @@ function drawGrid() {
   ctx.strokeStyle = "#00000044";
   for(let i=0;i<=gridSizeInches;i+=12){
     ctx.beginPath();
-    ctx.moveTo(i*cellSizePx, 0);
-    ctx.lineTo(i*cellSizePx, canvasSize);
+    ctx.moveTo(i*cellSizePx,0);
+    ctx.lineTo(i*cellSizePx,canvasSize);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(0, i*cellSizePx);
-    ctx.lineTo(canvasSize, i*cellSizePx);
+    ctx.moveTo(0,i*cellSizePx);
+    ctx.lineTo(canvasSize,i*cellSizePx);
     ctx.stroke();
   }
 
-  // Draw plants with scaled emoji
+  // Draw placed plants (scaled emoji)
   placedPlants.forEach(p=>{
-    const w = p.occupiedTiles[p.occupiedTiles.length-1].x - p.occupiedTiles[0].x +1;
-    const h = p.occupiedTiles[p.occupiedTiles.length-1].y - p.occupiedTiles[0].y +1;
+    const minX = p.occupiedTiles[0].x;
+    const minY = p.occupiedTiles[0].y;
+    const maxX = p.occupiedTiles[p.occupiedTiles.length-1].x;
+    const maxY = p.occupiedTiles[p.occupiedTiles.length-1].y;
+    const w = maxX - minX + 1;
+    const h = maxY - minY + 1;
     const emoji = emojiMap[p.plant.category] || '🌱';
-    const xPx = p.occupiedTiles[0].x * cellSizePx;
-    const yPx = p.occupiedTiles[0].y * cellSizePx;
+    const xPx = minX * cellSizePx;
+    const yPx = minY * cellSizePx;
     ctx.font = `${cellSizePx*Math.max(w,h)*0.8}px Arial`;
     ctx.fillText(emoji, xPx, yPx + cellSizePx*h*0.8);
   });
 }
 
-// Load seeds.csv
+// ------------------- LOAD SEEDS -------------------
 async function loadSeeds() {
   const resp = await fetch('seeds.csv');
   const text = await resp.text();
@@ -112,7 +116,7 @@ async function loadSeeds() {
   populateSidebar();
 }
 
-// Categorize plant
+// Categorize crop for emoji
 function categorize(crop){
   crop=crop.toLowerCase();
   if(crop.includes('herb')) return 'herb';
@@ -123,11 +127,12 @@ function categorize(crop){
   return 'other';
 }
 
-// Tools
+// ------------------- TOOLS -------------------
 document.getElementById('tiller').onclick = ()=>currentTool='tilled';
 document.getElementById('raisedBed').onclick = ()=>currentTool='raised';
 plantSelect.onchange = ()=>currentTool='plant';
 document.getElementById('toggleSidebar').onclick = ()=>sidebar.style.display = sidebar.style.display==='none'?'block':'none';
+
 gardenSizeSelect.onchange = ()=>{
   gridSizeFt = parseInt(gardenSizeSelect.value);
   gridSizeInches = gridSizeFt * 12;
@@ -137,21 +142,35 @@ gardenSizeSelect.onchange = ()=>{
   placedPlants=[];
 };
 
-// Snap function
+// Snap function for plant spacing
 function snapCoordinate(coord, snapSize){
   return Math.floor(coord / snapSize) * snapSize;
 }
 
-// Canvas click
+// ------------------- CANVAS CLICK -------------------
 canvas.addEventListener('click', e=>{
   const rect = canvas.getBoundingClientRect();
   let x = Math.floor((e.clientX - rect.left)/cellSizePx);
   let y = Math.floor((e.clientY - rect.top)/cellSizePx);
 
-  // Tools
-  if(currentTool==='tilled') { gardenGrid[y][x].type='tilled'; drawGrid(); return; }
-  if(currentTool==='raised') { gardenGrid[y][x].type='raised'; drawGrid(); return; }
+  // --- TOOLS: Tiller / Raised Bed ---
+  if(currentTool==='tilled' || currentTool==='raised') { 
+    const tileX = Math.floor(x/12)*12;
+    const tileY = Math.floor(y/12)*12;
+    for(let dy=0; dy<12; dy++){
+      for(let dx=0; dx<12; dx++){
+        const nx = tileX + dx;
+        const ny = tileY + dy;
+        if(nx<gridSizeInches && ny<gridSizeInches){
+          gardenGrid[ny][nx].type = currentTool;
+        }
+      }
+    }
+    drawGrid();
+    return;
+  }
 
+  // --- PLANT PLACEMENT ---
   if(currentTool==='plant' && plantSelect.value){
     const plant = plantsData[plantSelect.value];
     const snapTiles = plant.spacing; // spacing in inches
@@ -191,7 +210,7 @@ canvas.addEventListener('click', e=>{
   }
 });
 
-// Tooltip
+// ------------------- TOOLTIP -------------------
 canvas.addEventListener('mousemove', e=>{
   const rect=canvas.getBoundingClientRect();
   const x=Math.floor((e.clientX-rect.left)/cellSizePx);
@@ -211,7 +230,7 @@ canvas.addEventListener('mousemove', e=>{
   } else tooltip.style.display='none';
 });
 
-// Populate sidebar with all seeds.csv info
+// ------------------- SIDEBAR -------------------
 function populateSidebar(){
   plantList.innerHTML='';
   plantsData.forEach(p=>{
@@ -221,7 +240,7 @@ function populateSidebar(){
   });
 }
 
-// Initialize
+// ------------------- INIT -------------------
 window.onload = async ()=>{
   initGrid();
   await loadSeeds();
