@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Garden Planner - Zone 4a</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    th { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Garden Planner - Zone 4a</h1>
+  <table id="gardenTable">
+    <thead>
+      <tr>
+        <th>Crop</th>
+        <th>Variety</th>
+        <th>Start Method</th>
+        <th>Start Time</th>
+        <th>Outside Time</th>
+        <th>Spacing (inches)</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    // Load CSV file from same folder
+    fetch('seeds.csv')
+      .then(response => response.text())
+      .then(text => {
+        const rows = text.split('\n').slice(1); // skip header
+        const tableBody = document.querySelector('#gardenTable tbody');
+        rows.forEach(row => {
+          if(!row.trim()) return; // skip empty lines
+          const cols = row.split(',');
+          const tr = document.createElement('tr');
+          cols.forEach(col => {
+            const td = document.createElement('td');
+            td.textContent = col;
+            tr.appendChild(td);
+          });
+          tableBody.appendChild(tr);
+        });
+      });
+  </script>
+</body>
+</html>
