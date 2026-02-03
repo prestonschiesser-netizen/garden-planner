@@ -11,42 +11,62 @@ let plantsData = [];
 let gardenGrid = [];
 let placedPlants = [];
 
-let gridSize = parseInt(gardenSizeSelect.value);
-let cellSize = 600 / gridSize;
+let gridSizeFt = parseInt(gardenSizeSelect.value); // garden size in feet
+let gridSizeInches = gridSizeFt * 12; // internal 1-inch grid
+let canvasSize = 600; // pixels
+let cellSizePx = canvasSize / gridSizeInches; // size of 1 inch in pixels
 
 const emojiMap = { herb:"🌿", vegetable:"🥕", fruit:"🍅", flower:"🌸", corn:"🌽", bean:"🫘", other:"🌱" };
 
 // Initialize garden grid
 function initGrid() {
   gardenGrid = [];
-  for(let y=0;y<gridSize;y++){
+  for(let y=0;y<gridSizeInches;y++){
     gardenGrid[y]=[];
-    for(let x=0;x<gridSize;x++){
+    for(let x=0;x<gridSizeInches;x++){
       gardenGrid[y][x]={ type:'empty', plant:null };
     }
   }
 }
 
-// Draw garden grid and plants
+// Draw grid and plants
 function drawGrid() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let y=0;y<gridSize;y++){
-    for(let x=0;x<gridSize;x++){
+  ctx.clearRect(0,0,canvasSize,canvasSize);
+
+  // Draw tiles
+  for(let y=0;y<gridSizeInches;y++){
+    for(let x=0;x<gridSizeInches;x++){
       const cell = gardenGrid[y][x];
       ctx.fillStyle = cell.type==='tilled' ? '#deb887' :
                       cell.type==='raised' ? '#a0522d' : '#7cfc00';
-      ctx.fillRect(x*cellSize, y*cellSize, cellSize-1, cellSize-1);
-
-      if(cell.plant){
-        const emoji = emojiMap[cell.plant.category] || '🌱';
-        ctx.font = `${cellSize*0.6}px Arial`;
-        ctx.fillText(emoji, x*cellSize + cellSize*0.2, y*cellSize + cellSize*0.7);
-      }
-
-      ctx.strokeStyle = "#00000022";
-      ctx.strokeRect(x*cellSize, y*cellSize, cellSize, cellSize);
+      ctx.fillRect(x*cellSizePx, y*cellSizePx, cellSizePx, cellSizePx);
     }
   }
+
+  // Draw visual 1-ft grid every 12 inches
+  ctx.strokeStyle = "#00000044";
+  for(let i=0;i<=gridSizeInches;i+=12){
+    ctx.beginPath();
+    ctx.moveTo(i*cellSizePx, 0);
+    ctx.lineTo(i*cellSizePx, canvasSize);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, i*cellSizePx);
+    ctx.lineTo(canvasSize, i*cellSizePx);
+    ctx.stroke();
+  }
+
+  // Draw plants with scaled emoji
+  placedPlants.forEach(p=>{
+    const w = p.occupiedTiles[p.occupiedTiles.length-1].x - p.occupiedTiles[0].x +1;
+    const h = p.occupiedTiles[p.occupiedTiles.length-1].y - p.occupiedTiles[0].y +1;
+    const emoji = emojiMap[p.plant.category] || '🌱';
+    const xPx = p.occupiedTiles[0].x * cellSizePx;
+    const yPx = p.occupiedTiles[0].y * cellSizePx;
+    ctx.font = `${cellSizePx*Math.max(w,h)*0.8}px Arial`;
+    ctx.fillText(emoji, xPx, yPx + cellSizePx*h*0.8);
+  });
 }
 
 // Load seeds.csv
@@ -54,6 +74,8 @@ async function loadSeeds() {
   const resp = await fetch('seeds.csv');
   const text = await resp.text();
   const rows = text.split('\n').slice(1);
+  const categories = {};
+
   rows.forEach(row=>{
     if(!row.trim()) return;
     const cols = row.split(',');
@@ -68,15 +90,29 @@ async function loadSeeds() {
       category: categorize(cols[0])
     };
     plantsData.push(plant);
-    const option = document.createElement('option');
-    option.value = plantsData.length-1;
-    option.textContent = plant.variety;
-    plantSelect.appendChild(option);
+
+    if(!categories[plant.category]) categories[plant.category] = [];
+    categories[plant.category].push({index:plantsData.length-1, name: plant.variety});
   });
-  populateSidebar(); // populate full seed list
+
+  // Build <select> with <optgroup>
+  plantSelect.innerHTML='<option value="">--Select Plant--</option>';
+  for(const cat in categories){
+    const og = document.createElement('optgroup');
+    og.label = cat.charAt(0).toUpperCase()+cat.slice(1);
+    categories[cat].forEach(p=>{
+      const option = document.createElement('option');
+      option.value = p.index;
+      option.textContent = p.name;
+      og.appendChild(option);
+    });
+    plantSelect.appendChild(og);
+  }
+
+  populateSidebar();
 }
 
-// Categorize plant for emoji
+// Categorize plant
 function categorize(crop){
   crop=crop.toLowerCase();
   if(crop.includes('herb')) return 'herb';
@@ -87,20 +123,21 @@ function categorize(crop){
   return 'other';
 }
 
-// Tool selection
+// Tools
 document.getElementById('tiller').onclick = ()=>currentTool='tilled';
 document.getElementById('raisedBed').onclick = ()=>currentTool='raised';
 plantSelect.onchange = ()=>currentTool='plant';
 document.getElementById('toggleSidebar').onclick = ()=>sidebar.style.display = sidebar.style.display==='none'?'block':'none';
 gardenSizeSelect.onchange = ()=>{
-  gridSize=parseInt(gardenSizeSelect.value);
-  cellSize=600/gridSize;
+  gridSizeFt = parseInt(gardenSizeSelect.value);
+  gridSizeInches = gridSizeFt * 12;
+  cellSizePx = canvasSize / gridSizeInches;
   initGrid();
   drawGrid();
   placedPlants=[];
 };
 
-// Snap function for plant placement based on spacing
+// Snap function
 function snapCoordinate(coord, snapSize){
   return Math.floor(coord / snapSize) * snapSize;
 }
@@ -108,26 +145,16 @@ function snapCoordinate(coord, snapSize){
 // Canvas click
 canvas.addEventListener('click', e=>{
   const rect = canvas.getBoundingClientRect();
-  let x = Math.floor((e.clientX - rect.left)/cellSize);
-  let y = Math.floor((e.clientY - rect.top)/cellSize);
+  let x = Math.floor((e.clientX - rect.left)/cellSizePx);
+  let y = Math.floor((e.clientY - rect.top)/cellSizePx);
 
-  // Tool actions
-  if(currentTool==='tilled') { 
-    gardenGrid[y][x].type='tilled'; 
-    drawGrid(); 
-    return; 
-  }
-  if(currentTool==='raised') { 
-    gardenGrid[y][x].type='raised'; 
-    drawGrid(); 
-    return; 
-  }
+  // Tools
+  if(currentTool==='tilled') { gardenGrid[y][x].type='tilled'; drawGrid(); return; }
+  if(currentTool==='raised') { gardenGrid[y][x].type='raised'; drawGrid(); return; }
 
   if(currentTool==='plant' && plantSelect.value){
     const plant = plantsData[plantSelect.value];
-    const snapTiles = Math.ceil(plant.spacing / 12);
-
-    // Snap to plant's spacing grid
+    const snapTiles = plant.spacing; // spacing in inches
     x = snapCoordinate(x, snapTiles);
     y = snapCoordinate(y, snapTiles);
 
@@ -138,7 +165,7 @@ canvas.addEventListener('click', e=>{
       for(let dx=0; dx<snapTiles; dx++){
         const nx = x + dx;
         const ny = y + dy;
-        if(ny>=gridSize || nx>=gridSize){
+        if(ny>=gridSizeInches || nx>=gridSizeInches){
           canPlace=false; break;
         }
         const cell = gardenGrid[ny][nx];
@@ -164,11 +191,11 @@ canvas.addEventListener('click', e=>{
   }
 });
 
-// Tooltip for placed plants
+// Tooltip
 canvas.addEventListener('mousemove', e=>{
   const rect=canvas.getBoundingClientRect();
-  const x=Math.floor((e.clientX-rect.left)/cellSize);
-  const y=Math.floor((e.clientY-rect.top)/cellSize);
+  const x=Math.floor((e.clientX-rect.left)/cellSizePx);
+  const y=Math.floor((e.clientY-rect.top)/cellSizePx);
   const cell=gardenGrid[y]?.[x];
   if(cell && cell.plant){
     tooltip.style.display='block';
@@ -184,7 +211,7 @@ canvas.addEventListener('mousemove', e=>{
   } else tooltip.style.display='none';
 });
 
-// Populate sidebar with seeds.csv info
+// Populate sidebar with all seeds.csv info
 function populateSidebar(){
   plantList.innerHTML='';
   plantsData.forEach(p=>{
