@@ -73,6 +73,7 @@ async function loadSeeds() {
     option.textContent = plant.variety;
     plantSelect.appendChild(option);
   });
+  populateSidebar(); // populate full seed list
 }
 
 // Categorize plant for emoji
@@ -97,7 +98,6 @@ gardenSizeSelect.onchange = ()=>{
   initGrid();
   drawGrid();
   placedPlants=[];
-  updateSidebar();
 };
 
 // Snap function for plant placement based on spacing
@@ -105,19 +105,29 @@ function snapCoordinate(coord, snapSize){
   return Math.floor(coord / snapSize) * snapSize;
 }
 
-// Place plants respecting spacing and soil
+// Canvas click
 canvas.addEventListener('click', e=>{
   const rect = canvas.getBoundingClientRect();
   let x = Math.floor((e.clientX - rect.left)/cellSize);
   let y = Math.floor((e.clientY - rect.top)/cellSize);
 
-  if(currentTool==='tilled') { gardenGrid[y][x].type='tilled'; drawGrid(); return; }
-  if(currentTool==='raised') { gardenGrid[y][x].type='raised'; drawGrid(); return; }
+  // Tool actions
+  if(currentTool==='tilled') { 
+    gardenGrid[y][x].type='tilled'; 
+    drawGrid(); 
+    return; 
+  }
+  if(currentTool==='raised') { 
+    gardenGrid[y][x].type='raised'; 
+    drawGrid(); 
+    return; 
+  }
+
   if(currentTool==='plant' && plantSelect.value){
     const plant = plantsData[plantSelect.value];
     const snapTiles = Math.ceil(plant.spacing / 12);
 
-    // Snap x/y to plant's spacing grid
+    // Snap to plant's spacing grid
     x = snapCoordinate(x, snapTiles);
     y = snapCoordinate(y, snapTiles);
 
@@ -147,7 +157,6 @@ canvas.addEventListener('click', e=>{
         }
       }
       placedPlants.push({plant, occupiedTiles});
-      updateSidebar();
       drawGrid();
     } else {
       alert("Cannot place here. Check spacing or soil type.");
@@ -155,7 +164,7 @@ canvas.addEventListener('click', e=>{
   }
 });
 
-// Tooltip
+// Tooltip for placed plants
 canvas.addEventListener('mousemove', e=>{
   const rect=canvas.getBoundingClientRect();
   const x=Math.floor((e.clientX-rect.left)/cellSize);
@@ -175,12 +184,12 @@ canvas.addEventListener('mousemove', e=>{
   } else tooltip.style.display='none';
 });
 
-// Update sidebar
-function updateSidebar(){
+// Populate sidebar with seeds.csv info
+function populateSidebar(){
   plantList.innerHTML='';
-  placedPlants.forEach(p=>{
+  plantsData.forEach(p=>{
     const li=document.createElement('li');
-    li.textContent=`${p.plant.variety} - ${p.occupiedTiles.length} tiles`;
+    li.innerHTML = `<strong>${p.variety}</strong> (${p.crop}) - Start: ${p.start_method}, Spacing: ${p.spacing} in, Notes: ${p.notes}`;
     plantList.appendChild(li);
   });
 }
